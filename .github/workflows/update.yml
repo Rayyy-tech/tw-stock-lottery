@@ -1,0 +1,54 @@
+name: Daily Stock Crawler
+
+# 設定觸發條件
+on:
+  schedule:
+    # 💡 這裡使用的是 Cron 定時器，時間為 UTC (格林威治時間)
+    # 台灣時間 (UTC+8) 下午 5:30，換算成 UTC 就是上午 9:30
+    # 格式：分 時 日 月 週
+    - cron: '30 9 * * *'
+  
+  # 允許你在 GitHub 網頁上手動點擊按鈕立刻執行（測試時超好用）
+  workflow_dispatch:
+
+jobs:
+  crawler_job:
+    runs-on: ubuntu-latest # 在雲端開一台免費的 Linux (Ubuntu) 虛擬機
+
+    steps:
+      # 1. 把你的 GitHub 專案程式碼下載到虛擬機中
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. 設定 Python 環境
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # 3. 安裝你需要的反爬蟲特化套件 curl_cffi
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install curl_cffi
+
+      # 4. 執行你的爬蟲程式，這時會在雲端虛擬機裡產出全新的 data.json
+      - name: Run Crawler
+        run: python crawler.py
+
+      # 5. 🚀 核心：自動將虛擬機裡的 data.json Commit 並 Push 回你的 GitHub 倉庫
+      - name: Commit and Push changes
+        run: |
+          # 設定虛擬機的 Git 身分（讓 GitHub 知道是誰在 Commit）
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Action Bot"
+          
+          # 檢查 data.json 是否有變動，有的話才進行推送
+          git add data.json
+          if ! git diff --cached --quiet; then
+            git commit -m "🤖 自動更新：更新今日最新抽籤期望值資料"
+            git push
+            echo "✅ 資料已成功更新並推回倉庫！"
+          else
+            echo "ℹ️ 資料與昨日相同，無須更新。"
+          fi
